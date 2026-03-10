@@ -44,6 +44,7 @@ public:
     bool isEnabled() {return enabled;};
     bool isTimeEnabled() {return timeEnabled;};
     bool isPrintProcessNameEnabled() {return pNameEnabled;};
+    bool isPrintProcessArgsEnabled() {return pArgsEnabled;};
     bool shouldLog(const char* filename, int uid, const char* action, const char *retname);
     char* toString();
 
@@ -55,6 +56,7 @@ private:
     bool enabled;
     bool timeEnabled;
     bool pNameEnabled;
+    bool pArgsEnabled;
 };
 
 #endif

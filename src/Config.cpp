@@ -38,6 +38,7 @@ xmlChar* RETNAME=xmlCharStrdup("retname");
 xmlChar* ROOT=xmlCharStrdup("loggedFS");
 xmlChar* LOG_ENABLED=xmlCharStrdup("logEnabled");
 xmlChar* PNAME_ENABLED=xmlCharStrdup("printProcessName");
+xmlChar* PARGS_ENABLED=xmlCharStrdup("printProcessArgs");
 
 
 Config::Config()
@@ -45,6 +46,7 @@ Config::Config()
     // default values
     enabled=true; 
     pNameEnabled=true;
+	pArgsEnabled=false;
 }
 
 Config::~Config()
@@ -89,6 +91,17 @@ for (cur_node = a_node; cur_node; cur_node = cur_node->next)
 						}
 					else	{
 						printf("print process name enabled\n");
+						}
+					}
+				else if(xmlStrcmp(attr->name,PARGS_ENABLED)==0) {
+					//enable or disable process args prints in loggedfs
+					if (xmlStrcmp(attr->children->content,xmlCharStrdup("true"))!=0)
+						{
+						printf("print process args disabled\n");
+						}
+					else	{
+						pArgsEnabled=true;
+						printf("print process args enabled\n");
 						}
 					}
 				else printf("unknown attribute : %s\n",attr->name);

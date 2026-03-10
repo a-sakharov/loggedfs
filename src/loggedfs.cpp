@@ -70,7 +70,7 @@ static Config config;
 static int savefd;
 static el::base::DispatchAction dispatchAction = el::base::DispatchAction::NormalLog;
 static const char *loggerId = "default";
-static const char *additionalInfoFormat = " {%s} [ pid = %d %s uid = %d ]";
+static const char *additionalInfoFormat = " {%s} [ pid = %d %s %s uid = %d ]";
 static el::Logger *defaultLogger;
 
 const int MaxFuseArgs = 32;
@@ -141,6 +141,76 @@ static char *getcallername()
     return strdup(cmdline);
 }
 
+static char *getcallercmdline() {
+    char filename[100];
+    sprintf(filename, "/proc/%d/cmdline", fuse_get_context()->pid);
+    FILE *proc;
+    size_t cmdline_len = 0;
+    size_t cmdline_allocated = 256;
+    char *cmdline = NULL;
+
+    if ((proc = fopen(filename, "rb")) == NULL)
+            return NULL;
+    else 
+    {
+        // possible limit for commandline too big to allocate such buffer every
+        // time. let's try to read cmdline by chunks
+        do 
+        {
+            cmdline_allocated *= 2;
+            void *tmp = realloc(cmdline, cmdline_allocated);
+            if (!tmp) 
+            {
+                free(cmdline);
+                fclose(proc);
+                return NULL;
+            }
+            cmdline = (char *)tmp;
+            cmdline_len += fread(cmdline + cmdline_len, 1, cmdline_allocated - cmdline_len, proc);
+        } 
+        while (cmdline_len == cmdline_allocated);
+        fclose(proc);
+    }
+
+    if(cmdline_len == 0)
+    {
+        free(cmdline);
+        return NULL;
+    }
+
+    // now lets convert readed command-line (separated by null-bytes) to
+    // bash-valid value
+    char *bash_valid_cmdline = (char *)malloc(cmdline_len * 2); // worst possible scenario
+    if(!bash_valid_cmdline)
+    {
+        free(cmdline);
+        return NULL;
+    }
+
+    size_t dst_i = 0;
+    size_t src_i;
+    char c = cmdline[0];
+    for (src_i = 0; src_i < cmdline_len; src_i++, c = cmdline[src_i]) 
+    {
+        if (c == 0) 
+        {
+            bash_valid_cmdline[dst_i++] = ' ';
+        } 
+        else if (isalnum(c) || strchr("%+-./:=@_", c)) 
+        {
+            bash_valid_cmdline[dst_i++] = c;
+        } 
+        else 
+        {
+            bash_valid_cmdline[dst_i++] = '\\';
+            bash_valid_cmdline[dst_i++] = c;
+        }
+    }
+    bash_valid_cmdline[--dst_i] = '\x00';
+    free(cmdline);
+    return bash_valid_cmdline;
+}
+
 static void loggedfs_log(const char *path, const char *action, const int returncode, const char *format, ...)
 {
     const char *retname;
@@ -156,9 +226,10 @@ static void loggedfs_log(const char *path, const char *action, const int returnc
         char *buf = NULL;
         char *additionalInfo = NULL;
 
-        char *caller_name = getcallername();
-        asprintf(&additionalInfo, additionalInfoFormat, retname, fuse_get_context()->pid, config.isPrintProcessNameEnabled() ? caller_name : "", fuse_get_context()->uid);
-
+        char *caller_name = config.isPrintProcessNameEnabled() ? getcallername() : NULL;
+        char *caller_cmdline = config.isPrintProcessArgsEnabled() ? getcallercmdline() : NULL;
+        asprintf(&additionalInfo, additionalInfoFormat, retname, fuse_get_context()->pid, caller_name ? caller_name : "", caller_cmdline ? caller_cmdline : "", fuse_get_context()->uid);
+        
         va_start(args, format);
         vasprintf(&buf, format, args);
         va_end(args);
@@ -175,6 +246,7 @@ static void loggedfs_log(const char *path, const char *action, const int returnc
         free(buf);
         free(additionalInfo);
         free(caller_name);
+        free(caller_cmdline);
     }
 }
 
